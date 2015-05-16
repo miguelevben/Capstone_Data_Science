@@ -1,0 +1,3 @@
+https://miguelevben.shinyapps.io/Words_wizard_capstone_project/
+
+Right-panel where user type a text and a button to begin the prediction.
