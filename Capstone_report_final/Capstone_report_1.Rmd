@@ -1,0 +1,166 @@
+---
+title: "Capstone project: NLP"
+author: "Miguel Levy"
+date: "Saturday, March 28, 2015"
+output: html_document
+---
+
+## SUMMARY
+The study of human and text expressions in social media give us a powerful tool for understand and recognize from the meaning of a phrase to the mood of a person. A set of powerful A.I. technologies knowns as Natural Language Processing (NLP) and text mining, enable to the computers for the processing of written and spoken text. 
+
+This report reviews a set of twitter data, news articles, and blog posts provided by SwiftKey and make an primary exploratory analysis.  
+
+**GOALS:**
+
+    1.- Demonstrate how the data were downloaded and successfully loaded it in.
+    2.- Create a basic report of summary statistics about the data sets.
+    3.- Give a first feedback about plans of creating a prediction algorithm and Shiny app.
+    
+
+##MATERIALS AND METHODS - DATA SOURCES:  
+ 
+The data was collected from publicly available sources by a web crawler and numerous different webpages written in various languages (Finnish, German, US-English and Russian), you can get more information in this URL: <http://www.corpora.heliohost.org/aboutcorpus.html>. 
+
+For this project we use the english database located in a folder with three files:
+ **en_US.blogs.txt**,**en_US.news.txt**,**en_US.twitter.txt**. 
+ 
+**LOADING AND CLEANING DATASETS:**
+First of all we need to download the data and obtain some basic summary statistics.  
+
+```{r,echo = TRUE }
+urlfile <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+target_file <- "./Data/Coursera-SwiftKey.zip"
+
+#variables files english 
+path_en_files <- sprintf('%s/Data/final/en_US/',getwd())  
+blog_file <- paste(path_en_files,'en_US.blogs.txt', sep="")
+twitter_file <- paste(path_en_files,'en_US.twitter.txt', sep="")
+news_file <- paste(path_en_files,'en_US.news.txt', sep="")
+
+# Check if folder with data exist: If exist load data, 
+#       else -> create folder and load data.
+
+if (!file.exists("Data")){
+    dir.create("Data")
+    #Download and unzip dataset
+    download.file(urlfile, destfile = target_file, method = "auto")
+    unzip("./Data/Coursera-SwiftKey.zip", exdir="./Data")
+}
+```
+
+```{r,echo=FALSE}
+# First read and load text lines from files to 3 variables:
+blogs <- readLines(blog_file, encoding="UTF-8", warn=FALSE, skipNul=TRUE)
+blogs <- iconv(blogs, from="UTF-8", to="latin1", sub=" ")
+news <- readLines(news_file, encoding="UTF-8", warn=FALSE, skipNul=TRUE)
+news <- iconv(news, from="UTF-8", to="latin1", sub=" ")
+twitter <- readLines(twitter_file, encoding="UTF-8", warn=FALSE, skipNul=TRUE)
+twitter <- iconv(twitter, from="UTF-8", to="latin1", sub=" ")
+```
+
+Now we are going to examine the contents of these files with partial examples:  
+
+```{r,echo=FALSE}
+# blogs file content example
+head(blogs, n=2)
+# Twitter file content example
+tail(twitter, n=2)
+# news file content example
+head(news,n=2)
+```
+Now some statistics:
+
+a.- Size of files in MB:
+```{r, echo=TRUE}
+#files size
+size_files <- c(paste("Blog file:", as.integer(file.info(blog_file)$size / 1024^2,sep="")),paste("Twitter file:",  as.integer(file.info(twitter_file)$size / 1024^2, sep="")), paste("News file:", as.integer(file.info(news_file)$size / 1024^2, sep="")))
+```
+```{r,echo=FALSE}
+library("stringi")
+size_files[1]
+size_files[2]
+size_files[3]
+```
+b.- ```Num. of lines``` by file:
+```{r,echo=TRUE}
+#We use functions from library stringi
+#num lines and charts by file:
+content_files <- c(paste('Blog file: ',stri_stats_general(blogs),'Twitter file: ',stri_stats_general(twitter),'News file: ',stri_stats_general(news)))
+```
+```{r,echo=FALSE}
+content_files[1]
+```
+c.- ```Núm. charts``` by file:
+```{r,echo=FALSE}
+content_files[3]
+```
+d.- ```Núm. of words``` by file:
+```{r,echo=TRUE}
+words_files <- c(paste('Blog file: ',sum(stri_count_words(blogs)),'Twitter file: ',sum(stri_count_words(twitter)),'News file: ',sum(stri_count_words(news))))
+```
+```{r,echo=FALSE}
+words_files[1]
+```
+The total data size is greater than 500 MB, we randomly select three samples of 20000 records from each file to buid a sample data set. Is not possible to run a model using all data, for processing time and hardware resources limitations.  
+
+
+```{r,echo=TRUE}
+blogs_sample <- sample(blogs, 20000)
+news_sample  <- sample(news, 20000)
+twitter_sample <- sample(twitter, 20000)
+# sample data set
+sample_dataset <- c(blogs_sample, news_sample, twitter_sample)
+```
+ 
+**CLEANING DATASET:** 
+We are going to clean the sample dataset Using ```tm``` and ```weka``` libraries  to create a 'corpus' of this dataset: 
+
+    a.- Change Upper case to lower case.
+    b.- Remove numbers 
+    c.- Remove punctuation.
+    d.- Remove English stopwords (“the”, “is”, “at”, “which”...)
+    e.- Remove unnecessary spaces from the dataset.
+
+
+```{r,echo=TRUE}
+library("tm")
+Corpus_dataset <- Corpus(VectorSource(list(sample_dataset)))
+Corpus_dataset <- tm_map(Corpus_dataset, content_transformer(tolower))
+Corpus_dataset <- tm_map(Corpus_dataset, content_transformer(removePunctuation))
+Corpus_dataset <- tm_map(Corpus_dataset, content_transformer(removeNumbers))
+Corpus_dataset <- tm_map(Corpus_dataset,removeWords, stopwords("english"))
+Corpus_dataset <- tm_map(Corpus_dataset,stripWhitespace)
+
+```
+
+Now we have  texts which components are not structured and need to transform to elements for apply some statistical method to build prediction algoritms. This step is known as n-gram  (see <http://en.wikipedia.org/wiki/N-gram>). 
+
+Plot for 1-gram, one word top frequencies:
+    
+```{r,echo=FALSE}
+# Functions for tokenize 'tm' 
+tokenize_dataset <- DocumentTermMatrix(Corpus_dataset,control=list(tokenize=scan_tokenizer))
+tokenize_dataset <- removeSparseTerms(tokenize_dataset, 0.998)
+
+
+```
+```{r,echo=FALSE}
+library("NLP")
+library("ggplot2")
+freqUnigrams <- sort(colSums(as.matrix(tokenize_dataset)), decreasing=TRUE)[1:25]
+unifrequency <- data.frame(word=names(freqUnigrams), frequency=freqUnigrams)
+unifrequency <- transform(unifrequency,word = reorder(word,frequency)) 
+plotUnigrams <- ggplot(subset(unifrequency, frequency>1000), aes(word, frequency))
+plotUnigrams <- plotUnigrams + geom_bar(stat="identity", fill="#009E89")
+plotUnigrams <- plotUnigrams + theme(axis.text.x=element_text(angle=45, hjust=1)) + coord_flip()
+plotUnigrams <- plotUnigrams + ggtitle("Top words 1-gram for sample")
+plotUnigrams
+```
+
+
+**CONCLUSIONS:**
+
+This preliminary analysis was a first aproximation to construct a predictive algorithm for text prediction using NLP. It´s was possible using a unique sample corpus buid from three differents text files. The text prediction depend of the languaje employed in each media file. It´s not same the expressions used in twitter chat respect the expressions used in news or blog texts files. 
+
+I think is better extend this preliminary study analyzing the n-gram for individual files, is possible will be necessary to build two or three predictive algorithms adapted to each language (twitter, news and blogs).  
+
